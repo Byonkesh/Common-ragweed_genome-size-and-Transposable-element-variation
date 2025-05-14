@@ -1,0 +1,41 @@
+#Genome size estimation:
+
+Whole genome depth and BUSCOs depth:
+
+# Set working directory for BUSCOs bed 
+cd ~/om62_scratch/ragweed2022/genomesize/
+
+# Extract single-copy BUSCO gene locations (chromosome, start, end)
+# from the BUSCO output and save as a BED file.
+# Filters for "Complete" BUSCOs only.
+cat ~/ha22_scratch/ragweed-aus/busco/run_eukaryota_odb10/full_table.tsv \
+    | awk '$2 == "Complete" {print $3 "\t" $4 "\t" $5}' > single-copy-BUSCOs.bed
+
+#!/bin/bash
+#SBATCH --array=1-443  # Adjust for the number of samples
+
+# Move to the working directory for genome size estimation
+cd ~/ha22_scratch/edta-ragweed
+# Get the current sample from the SLURM task array
+N=$SLURM_ARRAY_TASK_ID
+SAMP=$(sed -n "${N}p" samples-443.txt). # samples-443.txt = List of the sample names
+
+# Load the samtools module
+module load samtools
+
+### Step 1: Calculate Whole Genome Depth ###
+# Calculate average sequencing depth across the whole genome using samtools depth
+samtools depth -b Genome_scaffolds_no-mito_chloro.bed -a ~/om62_scratch/ragweed2022/bam-modern/${SAMP}.ragweed2021.realigned.bam \
+    | awk '{sum+=$3; count++} END {if (count > 0) print sum/count; else print 0}' > ${SAMP}-wg.depth
+
+### Step 2: Calculate BUSCO-specific Depth ###
+# Calculate depth specifically for regions containing single-copy BUSCO genes
+samtools depth -b single-copy-BUSCOs.bed -a ~/om62_scratch/ragweed2022/bam-modern/${SAMP}.ragweed2021.realigned.bam \
+    | awk '{sum+=$3; count++} END {if (count > 0) print sum/count; else print 0}' > ${SAMP}-busco.depth
+
+# Combine the results into a dataframe (sample; whole genome depth; busco depth) 
+cat samples-443.txt | while read SAMP do echo $SAMP $(cat ${SAMP}-wg.depth) $(cat ${SAMP}-busco.depth) done > sample-wg-busco.txt 
+
+Calculation of genome size:
+GS = whole genome depth / Busco depth.
+
