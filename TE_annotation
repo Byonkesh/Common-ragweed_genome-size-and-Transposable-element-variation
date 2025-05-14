@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH --job-name=EDTAagain
+#SBATCH --time=7-00:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=36
+#SBATCH --mem=200G
+#SBATCH --mail-user=byonkesh.nongthongbam@monash.edu
+#SBATCH --mail-type=ALL
+#SBATCH --output=EDTAagain.out
+#SBATCH --error=EDTAagain.err
+
+# Load EDTA
+module load edta/2.0.0
+
+# Navigate to working directory
+cd ~/ha22_scratch/Ragweed_Annotation-2025
+
+# Run EDTA
+perl /usr/local/edta/2.0.0/bin/EDTA.pl \
+--genome ~/om62_scratch2/aa_2025/ref/aa_2025.fasta \
+--threads 36 \
+--anno 1 
