@@ -1,0 +1,199 @@
+Characterization of TE:
+
+# Filtration of Scaffolds which are not in the new reference genome:
+
+awk 'NR==FNR {keep[$1]; next} $2 in keep' ~/om62_scratch2/aa_2025/ref/aa_2025_str_end.txt ~/ha22_scratch/edta-ragweed/superfamilies_nonoverlapping.ragweed_simple_rRNA_TEs.sorted.minlength20.saf.txt > filtered_TE_saf.txt
+
+(base) [bnongtho@m3-login3 ragweed_trial]$ cut -f2 filtered_TE_saf.txt | sort | uniq | wc
+     49      49     285
+(base) [bnongtho@m3-login3 ragweed_trial]$ cut -f1 ~/om62_scratch2/aa_2025/ref/aa_2025_str_end.txt | sort | uniq | wc
+     51      51     297
+
+
+# Calculation of TE Percentage in the genome:
+library(readr)
+filtered_TE_saf <- read_delim("~/Documents/genome size estimation/TE characterisation/filtered_TE_saf.txt", 
+    delim = "\t", escape_double = FALSE, 
+    col_names = FALSE, trim_ws = TRUE)
+View(filtered_TE_saf)
+# Step 1: Convert Start and End columns to numeric
+filtered_TE_saf$Start <- as.numeric(filtered_TE_saf$Start)
+filtered_TE_saf$End <- as.numeric(filtered_TE_saf$End)
+
+# Step 2: Calculate TE length for each row
+filtered_TE_saf$TE_LENGTH <- filtered_TE_saf$End - filtered_TE_saf$Start + 1
+
+# Step 3: Set total genome length (in base pairs) 
+total_genome_length <- 1059918188. # 1114937637bp - chloro and mito TE length  # 1.11 Gbp (use hap1).
+
+# Step 4: Summarize total TE length and percentage per Repeat_type
+library(dplyr)
+
+te_lengths_summary <- filtered_TE_saf %>%
+  group_by(Repeat_type) %>%
+  summarise(Total_TE_Length = sum(TE_LENGTH), .groups = "drop") %>%
+  mutate(Percentage = (Total_TE_Length / total_genome_length) * 100) %>%
+  arrange(desc(Percentage))
+
+# Step 5: Print the summary
+print(te_lengths_summary)
+
+# A tibble: 14 × 3
+   Repeat_type       Total_TE_Length Percentage
+   <chr>                       <dbl>      <dbl>
+ 1 LTR/Copia               185381363  17.5     
+ 2 nonTIR/helitron         173883500  16.4     
+ 3 LTR/Gypsy               134437654  12.7     
+ 4 LTR/unknown             128185411  12.1     
+ 5 TIR/Mutator              51349641   4.84    
+ 6 TIR/hAT                  29384504   2.77    
+ 7 TIR/CACTA                14726602   1.39    
+ 8 TIR/PIF_Harbinger         7400235   0.698   
+ 9 Simple_repeat             5916485   0.558   
+10 TIR/Tc1_Mariner           1280986   0.121   
+11 Low_complexity            1117055   0.105   
+12 8s_rRNA                    381474   0.0360  
+13 28s_rRNA                    28522   0.00269 
+14 18s_rRNA                     7240   0.000683
+
+
+library(readxl)
+Copia <- read_excel("~/Documents/Ragweed data /TE_coverage_data/Copia.xlsx")
+View(Copia)
+
+library(dplyr)
+# Count number of TEs per Repeat_type
+te_type_counts <- filtered_TE_saf %>%
++   count(Repeat_type, name = "TE_count") %>%
++   arrange(desc(TE_count))  # Optional: sort by count
+# View the result
+print(te_type_counts)
+# A tibble: 14 × 2
+   Repeat_type       TE_count
+   <chr>                <int>
+ 1 nonTIR/helitron     472715
+ 2 LTR/unknown         200995
+ 3 LTR/Copia           154857
+ 4 TIR/Mutator         133124
+ 5 Simple_repeat       131479
+ 6 LTR/Gypsy           105299
+ 7 TIR/hAT              87620
+ 8 TIR/CACTA            44195
+ 9 TIR/PIF_Harbinger    22768
+10 Low_complexity       22652
+11 TIR/Tc1_Mariner       4857
+12 8s_rRNA               3317
+13 28s_rRNA                 5
+14 18s_rRNA                 4
+
+# Ploting of Percentage, TE length, Number, Distance to nearest gene: 
+library(ggplot2)
+
+# Set TE order and colors (same as before)
+te_order <- c("LTR/Copia", "LTR/Gypsy", "TIR/CACTA", "TIR/hAT", 
+              "nonTIR/helitron", "LTR/unknown", "TIR/PIF_Harbinger", 
+              "TIR/Mutator", "TIR/Tc1_Mariner")
+
+te_colors <- c("#a6cee3", "#1f78b4", "yellow", "#e31a1c", "#33a02c", 
+               "#b2df8a", "#8c510a", "#fdbf6f", "black")
+
+# Filter only TE classes in your defined order (excluding rRNA, low complexity, etc.)
+te_filtered <- te_lengths_summary[te_lengths_summary$Repeat_type %in% te_order, ]
+
+# Convert Repeat_type to factor with order
+te_filtered$Repeat_type <- factor(te_filtered$Repeat_type, levels = te_order)
+
+PlotA <- ggplot(te_filtered, aes(x = Percentage, y = Repeat_type, fill = Repeat_type)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(Percentage, 2), "%")),
+            nudge_y = 0, nudge_x = 1, size = 3) +  # Increased nudge_x value
+  labs(x = "TE percentage of Genome (%)", y = "TE Families", fill = "TE Type") +
+  scale_fill_manual(values = setNames(te_colors, te_order)) +
+  theme_minimal() +
+  theme(
+    plot.margin = margin(10, 10, 10, 10),
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.ticks = element_line(color = "black"),             # Add visible axis ticks
+    axis.ticks.length = unit(0.25, "cm"),                   # Adjust tick length             # Add axis lines
+    legend.position = "none"
+  )
+
+print(PlotA)
+merged_te_df$Distance_to_Gene_mean_Mbp <- merged_te_df$Distance_to_Gene_mean / 1e6
+merged_te_df$Distance_to_Gene_se_Mbp <- merged_te_df$Distance_to_Gene_se / 1e6
+# Plotting of distance to nearest gene
+PlotB <- ggplot(merged_te_df, aes(y = `TE_Class`, x = `Distance_to_Gene_mean_Mbp`, color = `TE_Class`)) + 
+  geom_point(size = 1.5) +  
+  geom_errorbarh(aes(xmin = `Distance_to_Gene_mean_Mbp` - `Distance_to_Gene_se_Mbp`, 
+                     xmax = `Distance_to_Gene_mean_Mbp` + `Distance_to_Gene_se_Mbp`), 
+                 height = 0.8, color = "#bebada") +  
+  labs(x = "Distance to Nearest Gene (Mbp)", y = "TE Class") +  
+  scale_color_manual(values = te_colors) +  
+  theme_minimal() +  
+  theme(
+    plot.margin = margin(10, 10, 10, 10),
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 10),
+    axis.ticks.x = element_line(color = "black"),
+    axis.ticks.length.x = unit(0.25, "cm"),
+    legend.position = "none"
+  )
+# Print the plot
+print(PlotB)
+
+
+# Plot2: TE length (bp)
+PlotC <- ggplot(merged_te_df, aes(y = `TE_Class`, x = `TE_length_mean`, color = `TE_Class`)) +
+  geom_point(size = 1.5) +
+  geom_errorbar(aes(xmin = `TE_length_mean` - `TE_length_se`, 
+                    xmax = `TE_length_mean` + `TE_length_se`), 
+                color = "#bebada") +
+  labs(x = "TE length (bp)") +
+  scale_color_manual(values = te_colors) +  # Apply custom colors
+  theme_minimal() +
+  theme(
+    plot.margin = margin(10, 10, 10, 10),
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 10),
+    axis.ticks.x = element_line(color = "black"),             # Add visible axis ticks
+    axis.ticks.length.x = unit(0.25, "cm"),
+    legend.position = "none"
+  )
+
+print(PlotC)
+
+
+# Plot3: TE number
+PlotD <- ggplot(merged_te_df, aes(y = `TE_Class`, x = `TE_count`, color = `TE_Class`)) +
+  geom_point(size = 1.5) +
+  labs(x = "TE number") +
+  scale_color_manual(values = te_colors) +  # Apply custom colors
+  theme_minimal() +
+  theme(plot.margin = margin(10, 10, 10, 10),
+        panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.ticks.x = element_line(color = "black"),             # Add visible axis ticks
+        axis.ticks.length.x = unit(0.25, "cm"),
+        axis.title.y = element_blank(), legend.position = "none")
+
+print(PlotD)
+
+# Combine the three plots into a single row with labels
+Plot1 <- plot_grid(
+  PlotA, PlotB, PlotD, PlotC,
+  label_size = 10,
+  nrow = 1,
+  align = "h",
+  rel_widths = c(10.2, 2.8, 4, 2),
+  hjust = -0.1
+)
+
+# Print the final combined plot
+print(Plot1)
