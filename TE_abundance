@@ -1,16 +1,30 @@
 TE average depth estimation:
 
 #!/bin/bash
-#SBATCH --array=1-443  # Number of samples
-N=$SLURM_ARRAY_TASK_ID
-SAMP=$(cat samples-443.txt | head -n $N | tail -n 1)
+#SBATCH --job-name=TE-Coverage-Modern
+#SBATCH --time=12:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=500GB
+#SBATCH --mail-user=byonkesh.nongthongbam@monash.edu
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=TE-Coverage-Modern-%A_%a.out
+#SBATCH --error=TE-Coverage-Modern-%A_%a.err
+#SBATCH --array=1-443
 
+# Load required module
 module load samtools
 
-# Define the annotation bed file
-annotation_bed="uniformly_arranged_non-overlapped_TE_simple_low_rRNA_modern.bed"
+# Sample ID from array
+N=$SLURM_ARRAY_TASK_ID
+SAMP=$(sed -n "${N}p" ~/ha22_scratch/edta-ragweed/modern_final_sample-443_names.txt)
 
-# Define the list of repeat types
+# File paths
+bam_dir=~/om62_scratch/ragweed2022/bam-modern
+annotation_bed=~/ha22_scratch/edta-ragweed/filtered_TE_saf.txt
+output_dir=~/ha22_scratch/edta-ragweed/coverage_output
+
+# List of repeat types
 repeat_types=(
     "18s_rRNA"
     "28s_rRNA"
@@ -28,45 +42,32 @@ repeat_types=(
     "TIR/Tc1_Mariner"
 )
 
-# Create output directory if it doesn't exist
-mkdir -p coverage_output
-
-# Step 1: Calculate Mean Coverage of Reads Mapping within Each Repeat
-# Iterate over each repeat type
+# Step 1: Calculate per-sample mean coverage for each repeat type
 for type in "${repeat_types[@]}"; do
-    # Define the output file path
-    output_file="coverage_output/${SAMP}_${type}_coverage.txt"
-    
-    # Calculate mean coverage for each repeat element type in the selected sample
-    samtools depth -b <(awk -v type="$type" '$4 == type {print $1"\t"$2"\t"$3}' "$annotation_bed") \
-    -a ~/om62_scratch/ragweed2022/bam-modern/${SAMP}.ragweed2021.realigned.bam | \
-    awk '{sum+=$3; count++} END {if (count > 0) print sum/count; else print 0}' > "$output_file" || echo "Error processing $type for sample $SAMP"
+    output_file="${output_dir}/${SAMP}_${type}_coverage.txt"
+
+    samtools depth -a -b <(awk -v type="$type" '$1 == type {print $2"\t"$3"\t"$4}' "$annotation_bed") \
+        "${bam_dir}/${SAMP}.ragweed2021.realigned.bam" |
+    awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print 0}' > "$output_file" || \
+        echo "Error processing $SAMP - $type" >&2
 done
 
-# Step 2: Collect the Results into Separate Files for Each Repeat Type
-cd ~/ha22_scratch/edta-ragweed/coverage_output/
+# Step 2: Summarize coverage across all samples (only in task 1)
+if [ "$N" -eq 1 ]; then
+    cd "$output_dir" || exit 1
 
-# Loop through each repeat type
-for repeat_type in "${repeat_types[@]}"; do
-    # Standardize filename (replace underscores with hyphens for compatibility)
-    standardized_type="${repeat_type//_/-}"
-    
-    # Create the file for the current repeat type
-    output_file="${standardized_type}_coverage_data.txt"
-    echo -e "Sample\tCoverage" > "$output_file"
-    
-    # Loop through each coverage file for the repeat type
-    for file in *_${standardized_type}_coverage.txt *_${repeat_type//_/-}_coverage.txt; do
-        # Check if the file exists to avoid errors
-        if [[ -f "$file" ]]; then
-            # Extract sample name and coverage value
+    for type in "${repeat_types[@]}"; do
+        summary_file="${type}_coverage_data.txt"
+        echo -e "Sample\tCoverage" > "$summary_file"
+
+        for file in *"${type}"_coverage.txt; do
             sample=$(basename "$file" | cut -d '_' -f 1)
             coverage=$(head -n 1 "$file" | tr -d '\n')
-            
-            # Write the sample name and coverage value to the file
-            echo -e "${sample}\t${coverage}" >> "$output_file"
-        fi
+            echo -e "${sample}\t${coverage}" >> "$summary_file"
+        done
     done
-done
+fi
+
+
 Calculation of TE abundance:
 GS = TE depth / Busco depth.
