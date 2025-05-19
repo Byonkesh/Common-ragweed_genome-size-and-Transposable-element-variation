@@ -86,48 +86,95 @@ print(te_type_counts)
 13 28s_rRNA                 5
 14 18s_rRNA                 4
 
-# Ploting of Percentage, TE length, Number, Distance to nearest gene: 
+# Ploting of Fig.1 : 
 library(ggplot2)
+library(dplyr)
+library(cowplot)
+library(scales)  # make sure this is loaded for number_format()
+library(ggforce)
 
-# Set TE order and colors (same as before)
-te_order <- c("LTR/Copia", "LTR/Gypsy", "TIR/CACTA", "TIR/hAT", 
-              "nonTIR/helitron", "LTR/unknown", "TIR/PIF_Harbinger", 
-              "TIR/Mutator", "TIR/Tc1_Mariner")
+# Your new data (example, replace with your actual data)
+te_data <- tibble::tribble(
+  ~Repeat_type, ~Total_TE_Length, ~Percentage,
+  "LTR/Copia", 185381363, 17.5,
+  "nonTIR/helitron", 173883500, 16.4,
+  "LTR/Gypsy", 134437654, 12.7,
+  "LTR/unknown", 128185411, 12.1,
+  "TIR/Mutator", 51349641, 4.84,
+  "TIR/hAT", 29384504, 2.77,
+  "TIR/CACTA", 14726602, 1.39,
+  "TIR/PIF_Harbinger", 7400235, 0.698,
+  "TIR/Tc1_Mariner", 1280986, 0.121
+)
 
-te_colors <- c("#a6cee3", "#1f78b4", "yellow", "#e31a1c", "#33a02c", 
-               "#b2df8a", "#8c510a", "#fdbf6f", "black")
+# Define colors for repeat types
+# Adding colors for the new repeat types (Simple_repeat, Low_complexity)
+te_colors <- c(
+  "LTR/Copia" = "#a6cee3",
+  "LTR/Gypsy" = "#1f78b4",
+  "TIR/CACTA" = "yellow",
+  "TIR/hAT" = "#e31a1c",
+  "nonTIR/helitron" = "#33a02c",
+  "LTR/unknown" = "#b2df8a",
+  "TIR/PIF_Harbinger" = "#8c510a",
+  "TIR/Mutator" = "#fdbf6f",
+  "TIR/Tc1_Mariner" = "black"
+)
 
-# Filter only TE classes in your defined order (excluding rRNA, low complexity, etc.)
-te_filtered <- te_lengths_summary[te_lengths_summary$Repeat_type %in% te_order, ]
+# To keep the order consistent, convert Repeat_type to factor with levels ordered by Percentage descending
+te_data <- te_data %>%
+  arrange(desc(Percentage)) %>%
+  mutate(Repeat_type = factor(Repeat_type, levels = Repeat_type))
 
-# Convert Repeat_type to factor with order
-te_filtered$Repeat_type <- factor(te_filtered$Repeat_type, levels = te_order)
-
-PlotA <- ggplot(te_filtered, aes(x = Percentage, y = Repeat_type, fill = Repeat_type)) +
+# Plot of Fig. 1A:
+PlotA <- ggplot(te_data, aes(x = Percentage, y = Repeat_type, fill = Repeat_type)) +
   geom_bar(stat = "identity") +
   geom_text(aes(label = paste0(round(Percentage, 2), "%")),
-            nudge_y = 0, nudge_x = 1, size = 3) +  # Increased nudge_x value
-  labs(x = "TE percentage of Genome (%)", y = "TE Families", fill = "TE Type") +
-  scale_fill_manual(values = setNames(te_colors, te_order)) +
+            nudge_x = 1, size = 4, hjust = 0) +
+  labs(x = "TE Percentage of Genome (%)", y = "TE class", fill = "TE Type") +
+  scale_fill_manual(values = te_colors) +
   theme_minimal() +
   theme(
     plot.margin = margin(10, 10, 10, 10),
     panel.border = element_rect(color = "black", fill = NA, size = 0.5),
-    axis.text.x = element_text(size = 10),
-    axis.text.y = element_text(size = 10),
-    axis.ticks = element_line(color = "black"),             # Add visible axis ticks
-    axis.ticks.length = unit(0.25, "cm"),                   # Adjust tick length             # Add axis lines
-    legend.position = "none"
-  )
+    axis.text.x = element_text(hjust = 1),
+    legend.position = "none",
+    axis.ticks.x = element_line(color = "black"),
+    axis.ticks.y = element_line(color = "black"),
+    axis.line.x = element_line(color = "black"),
+    axis.line.y = element_line(color = "black")
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) # Add space for text on the right
 
 print(PlotA)
-merged_te_df$Distance_to_Gene_mean_Mbp <- merged_te_df$Distance_to_Gene_mean / 1e6
-merged_te_df$Distance_to_Gene_se_Mbp <- merged_te_df$Distance_to_Gene_se / 1e6
-# Plotting of distance to nearest gene
-PlotB <- ggplot(merged_te_df, aes(y = `TE_Class`, x = `Distance_to_Gene_mean_Mbp`, color = `TE_Class`)) + 
+
+# Create the data frame with updated column names
+te_data <- data.frame(
+  TE_Class = c("Copia", "Gypsy", "Unknown", "Helitron", "CACTA", "hAT", "Mutator", "Harbinger", "Tc1mariner"),
+  mean_TE_length = c(1197, 1277, 638, 368, 333, 335, 386, 325, 265),
+  sd_TE_length = c(1862, 2002, 1044, 555, 450, 618, 938, 396, 268),
+  se_TE_length = c(4.73, 6.17, 2.33, 0.803, 2.14, 2.09, 2.57, 2.63, 3.84),
+  mean_distance = c(71776, 60417, 55615, 35058, 36596, 25252, 229273, 64996, 24541),
+  sd_distance = c(132399, 124052, 111666, 85645, 96459, 62292, 363265, 190622, 52633),
+  se_distance = c(336, 382, 249, 124, 459, 210, 995, 1263, 755),
+  TE_counts = c(154857, 105299, 200995, 472715, 44195, 87620, 133124, 22768, 4857)
+)
+
+# Print the data frame
+print(te_data)
+
+# Convert mean_distance and se_distance from bp to Mbp for plotting
+combined_te <- te_data %>%
+  mutate(
+    mean_distance_Mbp = mean_distance / 1e6,
+    se_distance_Mbp = se_distance / 1e6
+  )
+print(combined_te)
+# Plot: Distance to nearest gene (Mbp)
+PlotB <- ggplot(combined_te, aes(y = TE_Class, x = mean_distance_Mbp, color = TE_Class)) + 
   geom_point(size = 1.5) +  
-  geom_errorbarh(aes(xmin = `Distance_to_Gene_mean_Mbp` - `Distance_to_Gene_se_Mbp`, 
-                     xmax = `Distance_to_Gene_mean_Mbp` + `Distance_to_Gene_se_Mbp`), 
+  geom_errorbarh(aes(xmin = mean_distance_Mbp - se_distance_Mbp, 
+                     xmax = mean_distance_Mbp + se_distance_Mbp), 
                  height = 0.8, color = "#bebada") +  
   labs(x = "Distance to Nearest Gene (Mbp)", y = "TE Class") +  
   scale_color_manual(values = te_colors) +  
@@ -139,21 +186,17 @@ PlotB <- ggplot(merged_te_df, aes(y = `TE_Class`, x = `Distance_to_Gene_mean_Mbp
     axis.title.y = element_blank(),
     axis.text.x = element_text(size = 10),
     axis.ticks.x = element_line(color = "black"),
-    axis.ticks.length.x = unit(0.25, "cm"),
     legend.position = "none"
   )
-# Print the plot
 print(PlotB)
-
-
-# Plot2: TE length (bp)
-PlotC <- ggplot(merged_te_df, aes(y = `TE_Class`, x = `TE_length_mean`, color = `TE_Class`)) +
+# Plot: TE length (bp)
+PlotC <- ggplot(combined_te, aes(y = TE_Class, x = mean_TE_length, color = TE_Class)) +
   geom_point(size = 1.5) +
-  geom_errorbar(aes(xmin = `TE_length_mean` - `TE_length_se`, 
-                    xmax = `TE_length_mean` + `TE_length_se`), 
+  geom_errorbar(aes(xmin = mean_TE_length - se_TE_length, 
+                    xmax = mean_TE_length + se_TE_length), 
                 color = "#bebada") +
   labs(x = "TE length (bp)") +
-  scale_color_manual(values = te_colors) +  # Apply custom colors
+  scale_color_manual(values = te_colors) +  
   theme_minimal() +
   theme(
     plot.margin = margin(10, 10, 10, 10),
@@ -161,39 +204,125 @@ PlotC <- ggplot(merged_te_df, aes(y = `TE_Class`, x = `TE_length_mean`, color = 
     axis.text.y = element_blank(),
     axis.title.y = element_blank(),
     axis.text.x = element_text(size = 10),
-    axis.ticks.x = element_line(color = "black"),             # Add visible axis ticks
-    axis.ticks.length.x = unit(0.25, "cm"),
+    axis.ticks.x = element_line(color = "black"),
     legend.position = "none"
   )
 
-print(PlotC)
-
-
-# Plot3: TE number
-PlotD <- ggplot(merged_te_df, aes(y = `TE_Class`, x = `TE_count`, color = `TE_Class`)) +
+# Plot: TE number
+PlotD <- ggplot(combined_te, aes(y = TE_Class, x = TE_counts, color = TE_Class)) +
   geom_point(size = 1.5) +
   labs(x = "TE number") +
-  scale_color_manual(values = te_colors) +  # Apply custom colors
+  scale_color_manual(values = te_colors) +  
   theme_minimal() +
-  theme(plot.margin = margin(10, 10, 10, 10),
-        panel.border = element_rect(color = "black", fill = NA, size = 0.5),
-        axis.text.y = element_blank(),
-        axis.text.x = element_text(size = 10),
-        axis.ticks.x = element_line(color = "black"),             # Add visible axis ticks
-        axis.ticks.length.x = unit(0.25, "cm"),
-        axis.title.y = element_blank(), legend.position = "none")
+  theme(
+    plot.margin = margin(10, 10, 10, 10),
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(size = 10),
+    axis.ticks.x = element_line(color = "black"),
+    axis.title.y = element_blank(),
+    legend.position = "none"
+  )
 
-print(PlotD)
-
-# Combine the three plots into a single row with labels
+# Combine the plots into a single row (replace PlotA with your actual first plot if needed)
 Plot1 <- plot_grid(
   PlotA, PlotB, PlotD, PlotC,
   label_size = 10,
   nrow = 1,
   align = "h",
-  rel_widths = c(10.2, 2.8, 4, 2),
-  hjust = -0.1
+  rel_widths = c(7, 2.8, 3.3, 3),
+  hjust = -1
 )
 
-# Print the final combined plot
 print(Plot1)
+# Plot of Fig. 1B:
+# Skip hap1dat11 since it has 0 rows
+hap1dat10 <- hap1dat10 %>% rename(rRNA_density = `8s_rRNA`)
+hap1dat12 <- hap1dat12 %>% rename(rRNA_density = `28s_rRNA`)
+
+# Combine only non-empty data frames
+combined_hap <- bind_rows(hap1dat10, hap1dat12)
+
+# Ensure LOC is numeric in both
+all_hap_data$LOC <- as.numeric(all_hap_data$LOC)
+combined_hap$LOC <- as.numeric(combined_hap$LOC)
+
+# Merge by CHR and LOC
+merged_data <- merge(all_hap_data[, c("CHR", "LOC")],
+                     combined_hap[, c("CHR", "LOC", "rRNA_density")],
+                     by = c("CHR", "LOC"))
+str(merged_data)
+# Plot
+# Merge by CHR and LOC (assuming LOC matches)
+combined_plot_data <- merge(all_hap_data, merged_data[, c("CHR", "LOC", "rRNA_density")], by = c("CHR", "LOC"), all.x = TRUE)
+
+library(ggplot2)
+library(ggforce)
+
+Plot2 = ggplot(combined_plot_data, aes(x = LOCc / 1e6)) +
+  geom_segment(aes(x = LOCc / 1e6, xend = LOCc / 1e6, y = 0, yend = rRNA_density), color = "#636363") +
+  geom_point(aes(y = rRNA_density), color = "#636363", size = 2) +
+  ggforce::facet_row(~ CHR, scales = "free_x", space = "free") +
+  theme_minimal() +
+  labs(
+    x = NULL,
+    y = "rRNA Density"
+  ) +
+  theme(
+    strip.text = element_text(size = 10),        # Show chromosome labels
+    strip.background = element_rect(color = "black", fill = "white", size = 0.5),  # Border around chromosome names
+    axis.text.x = element_blank(),                             # Keep x-axis text blank
+    panel.spacing = unit(0.5, "lines"),
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.line.x = element_line(color = "black"),
+    axis.ticks.y = element_line(color = "black"),
+    axis.line.y = element_line(color = "black")
+  )
+
+print(Plot2)
+
+# Plot of Fig. 1C:
+# Convert TE_Type to factor with specified order
+all_hap_data$TE_type <- factor(all_hap_data$TE_type, levels = te_order)
+# Ensure CHR is a factor in order
+all_hap_data$CHR <- factor(all_hap_data$CHR, levels = paste0("h1s", 1:18))
+
+# In your ggplot, map color to TE_Type and apply scale manually:
+Plot3 = ggplot(all_hap_data, aes(x = LOC / 1e6, y = TE_density, color = TE_type)) +
+  geom_line(size = 0.5) +
+  ggforce::facet_row(~ CHR, scales = "free_x", space = "free") +
+  scale_color_manual(values = te_colors, name = "TE Type") +
+  theme_minimal() +
+  labs(
+    x = "Genomic Position (Mbp)",
+    y = "TE Density"
+  ) +
+  theme(
+    strip.text = element_blank(),           # removes chromosome names in facet strips
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 7),
+    panel.spacing = unit(0.5, "lines"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+    axis.ticks = element_line(color = "black"),
+    axis.line = element_line(color = "black"),
+    legend.position = "none"  # remove legend, keep if needed
+  )
+
+print(Plot3)
+
+# one digit after decimal in Plot3
+Plot3 <- Plot3 + 
+  scale_y_continuous(labels = number_format(accuracy = 0.01))  # one digit after decimal
+# Plotting the combined plot:
+combined_plot_final <- plot_grid(
+  Plot1, Plot2, Plot3,
+  ncol = 1,
+  nrow = 3,
+  align = "v",                # vertical alignment
+  rel_heights = c(6, 2.5, 3), # relative heights for each plot
+  label_size = 10,
+  hjust = -0.1               # this will adjust labels horizontally (optional)
+)
+
+print(combined_plot_final)
